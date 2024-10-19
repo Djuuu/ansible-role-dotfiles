@@ -1,0 +1,63 @@
+---
+
+- name: Ensure dotfiles repository is cloned locally.
+  environment:
+    # https://github.com/ansible/ansible/issues/77213
+    # https://github.com/ansible/ansible/pull/81931
+    LANGUAGE: C
+  ansible.builtin.git:
+    repo: "{{ dotfiles_repo }}"
+    dest: "{{ dotfiles_repo_local_destination }}"
+    version: "{{ dotfiles_repo_version }}"
+    force: "{{ dotfiles_force_reset | default(false) }}"
+  register: git_result
+
+- name: Backup dotfiles
+  when: dotfiles_backup or not git_result.before
+  block:
+    - name: Backup old dotfiles
+      ansible.builtin.command: "{{ dotfiles_repo_local_destination }}/backup"
+      args:
+        chdir: ~/
+      ignore_errors: true
+      register: backup_result
+      changed_when: true
+
+    - name: Backup old dotfiles result
+      ansible.builtin.debug:
+        msg:
+          - "{{ backup_result.stdout_lines }}"
+          - "{{ backup_result.stderr_lines }}"
+
+    - name: Delete old local dotfiles
+      ansible.builtin.file:
+        path: "~/{{ item }}"
+        state: absent
+      loop: "{{ backup_result.stdout_lines
+            | map('regex_replace', '^Backing up ~/[^/]*/(.*)$', '\\1')
+            | select('match', '^[^/]*$')
+            | list
+          }}"
+
+
+- name: Install dotfiles
+  block:
+    - name: Install dotfiles
+      ansible.builtin.command: "{{ dotfiles_install_command }}"
+      ignore_errors: true
+      register: install_result
+      changed_when: true
+
+    - name: Install dotfiles result
+      ansible.builtin.debug:
+        msg:
+          - "{{ install_result.stdout_lines }}"
+          - "{{ install_result.stderr_lines }}"
+
+- name: Configure dotfiles
+  ansible.builtin.replace:
+    path: "{{ dotfiles_repo_local_destination }}/.gitconfig.local"
+    regexp: '^\s*{{ item.option }}\s*=.*$'
+    replace: "	{{ item.option }} = {{ item.value }}"
+  loop: "{{ dotfiles_gitconfig }}"
+  when: dotfiles_gitconfig is defined
