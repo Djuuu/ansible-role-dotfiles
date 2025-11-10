@@ -13,10 +13,12 @@
   register: git_result
 
 - name: Backup dotfiles
-  when: dotfiles_backup or not git_result.before
+  when: dotfiles_backup or not (git_result.before is truthy)
   block:
     - name: Backup old dotfiles
-      ansible.builtin.command: "{{ dotfiles_repo_local_destination }}/backup"
+      vars:
+        backup_opts: "{{ git_result.before is truthy | ternary('', '--delete') }}"
+      ansible.builtin.command: "{{ dotfiles_repo_local_destination }}/backup {{ backup_opts }}"
       args:
         chdir: ~/
       ignore_errors: true
@@ -28,17 +30,6 @@
         msg:
           - "{{ backup_result.stdout_lines }}"
           - "{{ backup_result.stderr_lines }}"
-
-    - name: Delete old local dotfiles
-      ansible.builtin.file:
-        path: "~/{{ item }}"
-        state: absent
-      loop: "{{ backup_result.stdout_lines
-            | map('regex_replace', '^Backing up ~/[^/]*/(.*)$', '\\1')
-            | select('match', '^[^/]*$')
-            | list
-          }}"
-
 
 - name: Install dotfiles
   block:
