@@ -47,7 +47,7 @@
 
 - name: Configure dotfiles
   ansible.builtin.replace:
-    path: "{{ dotfiles_repo_local_destination }}/.gitconfig.local"
+    path: "{{ dotfiles_repo_local_destination }}/config/git/config.local"
     regexp: '^\s*{{ item.option }}\s*=.*$'
     replace: "	{{ item.option }} = {{ item.value }}"
   loop: "{{ dotfiles_gitconfig }}"
